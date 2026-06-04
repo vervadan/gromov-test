@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Тест: Какой у тебя тип финансового мышления?</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Mulish:wght@300;400;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  background: #111;
+  color: #f5f5f5;
+  font-family: 'Mulish', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* HEADER */
+.bar {
+  position: sticky; top: 0; z-index: 99;
+  background: #111;
+  border-bottom: 1px solid #2a2a2a;
+  padding: 14px 20px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.bar-brand { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #666; font-weight: 600; }
+.bar-brand span { color: #8B253B; }
+.bar-progress { display: none; align-items: center; gap: 10px; font-size: 12px; color: #555; }
+.bar-progress.show { display: flex; }
+.pbar { width: 80px; height: 2px; background: #2a2a2a; border-radius: 2px; }
+.pfill { height: 100%; background: #8B253B; border-radius: 2px; transition: width 0.35s ease; width: 0%; }
+
+/* INTRO */
+#s-intro { padding: 40px 20px 60px; max-width: 600px; margin: 0 auto; }
+.tag { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #8B253B; font-weight: 600; margin-bottom: 16px; }
+h1 { font-family: 'Playfair Display', serif; font-size: 36px; line-height: 1.15; margin-bottom: 24px; font-weight: 700; }
+h1 em { font-style: italic; color: #8B253B; }
+.intro-p { font-size: 16px; color: #aaa; line-height: 1.75; margin-bottom: 24px; }
+.quote { border-left: 2px solid #8B253B; padding: 16px 20px; background: #1e1e1e; border-radius: 0 6px 6px 0; margin: 28px 0 32px; }
+.quote p { font-family: 'Playfair Display', serif; font-style: italic; font-size: 16px; line-height: 1.6; }
+.quote cite { display: block; font-size: 11px; color: #555; margin-top: 8px; letter-spacing: 0.1em; }
+.meta { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 36px; }
+.meta-i { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #666; }
+.dot { width: 5px; height: 5px; border-radius: 50%; background: #8B253B; flex-shrink: 0; }
+
+.btn-big {
+  display: block; width: 100%;
+  background: #8B253B; color: #fff;
+  border: none; border-radius: 4px;
+  padding: 20px;
+  font-family: 'Mulish', sans-serif;
+  font-size: 15px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.btn-big:active { background: #a02d47; }
+
+/* QUESTION */
+#s-q { padding: 32px 20px 60px; max-width: 600px; margin: 0 auto; }
+.q-num { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #8B253B; font-weight: 600; margin-bottom: 16px; }
+.q-text { font-family: 'Playfair Display', serif; font-size: 24px; line-height: 1.4; margin-bottom: 32px; }
+.opts { display: flex; flex-direction: column; gap: 10px; }
+
+.opt {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 18px 16px;
+  background: #1e1e1e;
+  border: 1.5px solid #2a2a2a;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 0.15s, background 0.15s;
+  -webkit-user-select: none; user-select: none;
+}
+.opt.sel { border-color: #8B253B; background: #271318; }
+.opt-l {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: #2a2a2a; color: #666;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.opt.sel .opt-l { background: #8B253B; color: #fff; }
+.opt-t { font-size: 16px; line-height: 1.5; color: #bbb; padding-top: 4px; }
+.opt.sel .opt-t { color: #f5f5f5; }
+
+.nav { display: flex; justify-content: space-between; align-items: center; margin-top: 28px; gap: 12px; }
+.btn-sec {
+  padding: 16px 24px;
+  background: transparent; color: #666;
+  border: 1.5px solid #2a2a2a; border-radius: 4px;
+  font-family: 'Mulish', sans-serif; font-size: 13px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  cursor: pointer; touch-action: manipulation;
+  flex: 1;
+}
+.btn-sec:active { background: #1e1e1e; }
+.btn-pri {
+  padding: 16px 24px;
+  background: #8B253B; color: #fff;
+  border: none; border-radius: 4px;
+  font-family: 'Mulish', sans-serif; font-size: 13px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  cursor: pointer; touch-action: manipulation;
+  flex: 2;
+  opacity: 0.4; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.btn-pri.on { opacity: 1; pointer-events: auto; }
+.btn-pri:active { background: #a02d47; }
+
+/* RESULT */
+#s-res { padding: 32px 20px 60px; max-width: 600px; margin: 0 auto; }
+.res-label { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #8B253B; font-weight: 600; margin-bottom: 8px; }
+.res-name { font-family: 'Playfair Display', serif; font-size: 48px; font-weight: 700; line-height: 1.05; margin-bottom: 12px; }
+.res-tag { font-size: 16px; color: #999; line-height: 1.65; margin-bottom: 28px; }
+.divider { width: 36px; height: 2px; background: #8B253B; margin-bottom: 28px; }
+.res-body { font-size: 16px; line-height: 1.8; color: #aaa; margin-bottom: 28px; }
+.res-body p { margin-bottom: 14px; }
+.block { background: #1e1e1e; border-left: 2px solid #8B253B; padding: 18px 20px; border-radius: 0 6px 6px 0; margin-bottom: 12px; }
+.block-l { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #8B253B; font-weight: 600; margin-bottom: 8px; }
+.block-t { font-size: 15px; line-height: 1.65; color: #bbb; }
+
+.cta { margin-top: 36px; background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 6px; padding: 28px 20px; text-align: center; }
+.cta h2 { font-family: 'Playfair Display', serif; font-size: 22px; margin-bottom: 10px; }
+.cta p { font-size: 14px; color: #666; line-height: 1.65; margin-bottom: 24px; }
+.btn-tg {
+  display: block; width: 100%;
+  background: #8B253B; color: #fff;
+  border: none; border-radius: 4px;
+  padding: 18px;
+  font-family: 'Mulish', sans-serif; font-size: 14px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer; touch-action: manipulation;
+  text-decoration: none;
+}
+.btn-tg:active { background: #a02d47; }
+.btn-retry {
+  display: block; width: 100%; margin-top: 14px;
+  background: none; border: none; color: #555; font-size: 13px;
+  cursor: pointer; touch-action: manipulation;
+  text-decoration: underline; text-underline-offset: 3px;
+  padding: 8px;
+}
+.btn-retry:active { color: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-brand">Алексей Громов <span>/ Психология денег</span></div>
+  <div class="bar-progress" id="barprog">
+    <div class="pbar"><div class="pfill" id="pfill"></div></div>
+    <span id="plabel">1/9</span>
+  </div>
+</div>
+
+<!-- INTRO -->
+<div class="screen active" id="s-intro">
+  <div class="tag">Бесплатный тест</div>
+  <h1>Какой у тебя тип <em>финансового</em> мышления?</h1>
+  <p class="intro-p">Большинство проблем с деньгами — не про деньги. Это про то, как ты реагируешь. На нехватку, на неожиданный доход, на чужой успех. Деньги просто делают это видимым.</p>
+  <div class="quote">
+    <p>«Проблема не в том, сколько ты зарабатываешь. Проблема в том, как ты думаешь о деньгах»</p>
+    <cite>— Алексей Громов</cite>
+  </div>
+  <div class="meta">
+    <div class="meta-i"><div class="dot"></div>9 вопросов</div>
+    <div class="meta-i"><div class="dot"></div>3–4 минуты</div>
+    <div class="meta-i"><div class="dot"></div>Результат сразу</div>
+  </div>
+  <button class="btn-big" id="startBtn">Пройти тест</button>
+</div>
+
+<!-- QUESTION -->
+<div class="screen" id="s-q">
+  <div class="q-num" id="qnum">Вопрос 1 из 9</div>
+  <div class="q-text" id="qtext"></div>
+  <div class="opts" id="opts"></div>
+  <div class="nav">
+    <button class="btn-sec" id="backBtn">← Назад</button>
+    <button class="btn-pri" id="nextBtn">Далее →</button>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div class="screen" id="s-res">
+  <div class="res-label" id="rlabel"></div>
+  <div class="res-name" id="rname"></div>
+  <div class="res-tag" id="rtag"></div>
+  <div class="divider"></div>
+  <div class="res-body" id="rbody"></div>
+  <div class="block"><div class="block-l">Твой главный паттерн</div><div class="block-t" id="rpat"></div></div>
+  <div class="block"><div class="block-l">Что это стоит</div><div class="block-t" id="rcost"></div></div>
+  <div class="block"><div class="block-l">Первый шаг</div><div class="block-t" id="rstep"></div></div>
+  <div class="cta">
+    <h2>Хочешь разобраться глубже?</h2>
+    <p>Алексей разбирает психологию денег в коротких видео — без эзотерики и мотивашек. Только конкретика.</p>
+    <a class="btn-tg" href="https://t.me/gromov_money" target="_blank">Перейти в Telegram</a>
+    <button class="btn-retry" id="retryBtn">Пройти тест заново</button>
+  </div>
+</div>
+
+<script>
+var QS = [
+  { q: 'Ты получил деньги сверх обычного. Первая мысль — не обдуманная, а именно первая.', opts: [
+    { l:'А', t:'Уже знаю на что', tp:'Т' },
+    { l:'Б', t:'Главное не потратить лишнего', tp:'Н' },
+    { l:'В', t:'Наконец-то выдохну', tp:'И' },
+    { l:'Г', t:'Интересно, куда это можно направить', tp:'С' }
+  ]},
+  { q: 'Конец месяца. Ты примерно знаешь сколько потратил?', opts: [
+    { l:'А', t:'Да. Веду или периодически свожу баланс', tp:'С' },
+    { l:'Б', t:'Нет. Стараюсь не считать — всё равно расстроюсь', tp:'И' },
+    { l:'В', t:'Приблизительно. Точные цифры меня не интересуют', tp:'Т' },
+    { l:'Г', t:'Да, примерно. Главное — отложенное не тронуто', tp:'Н' }
+  ]},
+  { q: 'Тебе нужно принять финансовое решение — не срочное, но важное. Как долго откладываешь?', opts: [
+    { l:'А', t:'Думаю долго, но чаще выбираю осторожный вариант', tp:'Н' },
+    { l:'Б', t:'Ставлю себе срок. Стараюсь не затягивать', tp:'С' },
+    { l:'В', t:'Долго. Иногда до последнего', tp:'И' },
+    { l:'Г', t:'Пока не надоест думать — потом делаю как чувствую', tp:'Т' }
+  ]},
+  { q: 'Был тяжёлый период — стресс, усталость. Что происходило с деньгами?', opts: [
+    { l:'А', t:'Тратил больше — это помогало переключиться', tp:'Т' },
+    { l:'Б', t:'Тратил чуть больше — потом возвращался и разбирал куда ушло', tp:'С' },
+    { l:'В', t:'Ничего не менялось. В любом состоянии держу себя в руках', tp:'Н' },
+    { l:'Г', t:'Не отслеживал. Было не до этого', tp:'И' }
+  ]},
+  { q: 'Ты хочешь купить что-то дорогое. Не нужное, но очень хочется.', opts: [
+    { l:'А', t:'Дам себе паузу. Если через время желание не прошло — куплю', tp:'С' },
+    { l:'Б', t:'Найду причину отложить решение. Потом само отпадёт', tp:'И' },
+    { l:'В', t:'Если сильно хочется — куплю. Потом разберусь', tp:'Т' },
+    { l:'Г', t:'Скорее всего не куплю. Каждый раз убеждаю себя что не время', tp:'Н' }
+  ]},
+  { q: 'Ты узнал, что коллега зарабатывает значительно больше тебя. Первая реакция.', opts: [
+    { l:'А', t:'Неловкость. Не хочу об этом думать', tp:'И' },
+    { l:'Б', t:'Любопытство — что он делает иначе', tp:'С' },
+    { l:'В', t:'Укол зависти — быстро проходит', tp:'Т' },
+    { l:'Г', t:'Интересно как он это устроил с точки зрения накоплений', tp:'Н' }
+  ]},
+  { q: 'Тебе предлагают взять небольшой кредит на что-то, что реально нужно. Процент нормальный.', opts: [
+    { l:'А', t:'Нет. Лучше подожду и накоплю сам', tp:'Н' },
+    { l:'Б', t:'Скорее нет. Долги — это тревога', tp:'И' },
+    { l:'В', t:'Посчитаю переплату и нагрузку на бюджет. Если разумно — возьму', tp:'С' },
+    { l:'Г', t:'Смотря на настроение и ощущение момента', tp:'Т' }
+  ]},
+  { q: 'Ты разговариваешь о деньгах с близкими. Как тебе этот разговор?', opts: [
+    { l:'А', t:'Нормально. Иногда сам инициирую — полезно сверяться', tp:'С' },
+    { l:'Б', t:'Некомфортно. Стараюсь уходить от темы', tp:'И' },
+    { l:'В', t:'Мне интересно, но мы не сходимся — я осторожнее', tp:'Н' },
+    { l:'Г', t:'Нормально, если без занудства и таблиц', tp:'Т' }
+  ]},
+  { q: 'Ты думаешь о деньгах через 5 лет. Что видишь?', opts: [
+    { l:'А', t:'Надеюсь что будет лучше — как именно, не знаю', tp:'Т' },
+    { l:'Б', t:'Есть примерная картина. Не идеальная, но есть', tp:'С' },
+    { l:'В', t:'Вижу что-то отложенное. Главное — подушка', tp:'Н' },
+    { l:'Г', t:'Ничего конкретного. Неприятно об этом думать', tp:'И' }
+  ]}
+];
+
+var TYPES = {
+  И: {
+    num:'01', name:'Избегатель',
+    tag:'Деньги вызывают тревогу — и ты стараешься об этом не думать',
+    body:['Дело не в лени. Ты не открываешь выписку, не считаешь расходы — не потому что некогда. Потому что боишься что там.','Это работает в краткосроке. Не видишь — не болит. Но деньги сами по себе никуда не двигаются. Они просто утекают, пока ты не смотришь.','Проблема не в цифрах. Проблема в том, что смотреть страшно. Это уже другой разговор.'],
+    pat:'Откладывать финансовые решения до последнего — не из-за занятости, а потому что любой контакт с темой вызывает тревогу.',
+    cost:'Каждый месяц без решения — это месяц, который уже не вернуть. Деньги не ждут пока ты будешь готов.',
+    step:'Не разбирать всё сразу. Одна цифра — сколько пришло в этом месяце. Просто посмотреть. Без выводов.'
+  },
+  Т: {
+    num:'02', name:'Транжира',
+    tag:'Деньги для тебя — это эмоция, а не инструмент',
+    body:['Ты тратишь — и тебе от этого хорошо. В момент. Потом по-разному, но это уже потом.','Штука в том, что ты часто покупаешь не вещь. Ты покупаешь паузу. Способ не думать о том, что давит прямо сейчас. Мозг нашёл рабочий способ переключаться — и этот способ стоит денег.','Деньги не задерживаются не потому что мало зарабатываешь. А потому что в момент решения ты не про деньги думаешь.'],
+    pat:'Решения принимаются на эмоции, в моменте. Деньги — это способ почувствовать себя лучше прямо сейчас.',
+    cost:'Ты живёшь хорошо сегодня — но будущий ты за это платит. Каждый раз.',
+    step:'Не запрещать себе тратить. Перед покупкой спросить себя: я хочу это — или мне сейчас плохо? Просто вопрос. Без самоосуждения.'
+  },
+  Н: {
+    num:'03', name:'Накопитель',
+    tag:'Деньги — это безопасность. И поэтому любое их движение пугает',
+    body:['Подушка есть. Импульсных трат нет. Это честная позиция — и она работает.','Но в какой-то момент деньги перестают быть инструментом. Они становятся тем, что тебя защищает. И тогда любое их движение — даже очевидно разумное — вызывает сопротивление.','Не потому что ты жадный. Потому что трогать страшно. Вопрос только — от чего именно ты защищаешься.'],
+    pat:'Копить ради самого ощущения запаса. Любое движение денег — дискомфорт, даже когда математика говорит «да».',
+    cost:'Деньги без движения теряют стоимость. А возможности, которые прошли мимо, уже не возвращаются.',
+    step:'Спросить себя честно — от чего я защищаюсь? Не осуждать ответ. Просто понять.'
+  },
+  С: {
+    num:'04', name:'Стратег',
+    tag:'Ты думаешь о деньгах осознанно — и это работает. Но есть слепая зона',
+    body:['Ты думаешь о деньгах — и это видно. Есть план, есть логика, нет паники. Это работает.','Но контроль незаметно становится самоцелью. Ты можешь потратить — но не разрешаешь себе. Математика говорит «да» — а ты всё равно выбираешь осторожный вариант. Просто потому что так правильно.','В какой-то момент ты уже не управляешь деньгами. Ты им отчитываешься.'],
+    pat:'Всё взвешивать, всё планировать — и терять гибкость там, где она нужна больше, чем план.',
+    cost:'Жёсткий контроль без пространства для случайного — это тоже ограничение. Иногда лучшие решения принимаются не по таблице.',
+    step:'Раз в месяц сделать что-то финансово нелогичное — но важное для тебя. Напомнить себе зачем всё это.'
+  }
+};
+
+var cur = 0;
+var ans = [null,null,null,null,null,null,null,null,null];
+
+function show(id) {
+  var ss = document.querySelectorAll('.screen');
+  for (var i=0; i<ss.length; i++) ss[i].classList.remove('active');
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function renderQ() {
+  var q = QS[cur];
+  document.getElementById('qnum').textContent = 'Вопрос ' + (cur+1) + ' из ' + QS.length;
+  document.getElementById('qtext').textContent = q.q;
+
+  var pct = Math.round(((cur + (ans[cur]!==null?1:0)) / QS.length) * 100);
+  document.getElementById('pfill').style.width = pct + '%';
+  document.getElementById('plabel').textContent = (cur+1) + '/' + QS.length;
+
+  var opts = document.getElementById('opts');
+  opts.innerHTML = '';
+  for (var i=0; i<q.opts.length; i++) {
+    (function(idx) {
+      var o = q.opts[idx];
+      var d = document.createElement('div');
+      d.className = 'opt' + (ans[cur]===idx?' sel':'');
+      d.innerHTML = '<div class="opt-l">'+o.l+'</div><div class="opt-t">'+o.t+'</div>';
+      d.addEventListener('click', function(){ pick(idx); });
+      opts.appendChild(d);
+    })(i);
+  }
+
+  document.getElementById('backBtn').style.visibility = cur===0 ? 'hidden' : 'visible';
+  var nb = document.getElementById('nextBtn');
+  nb.textContent = cur===QS.length-1 ? 'Результат →' : 'Далее →';
+  if (ans[cur]!==null) nb.classList.add('on'); else nb.classList.remove('on');
+}
+
+function pick(idx) {
+  ans[cur] = idx;
+  var ds = document.querySelectorAll('.opt');
+  for (var i=0; i<ds.length; i++) {
+    if (i===idx) ds[i].classList.add('sel'); else ds[i].classList.remove('sel');
+  }
+  var pct = Math.round(((cur+1)/QS.length)*100);
+  document.getElementById('pfill').style.width = pct+'%';
+  document.getElementById('nextBtn').classList.add('on');
+}
+
+function startTest() {
+  document.getElementById('barprog').classList.add('show');
+  show('s-q');
+  renderQ();
+}
+
+function goNext() {
+  if (ans[cur]===null) return;
+  if (cur < QS.length-1) { cur++; renderQ(); }
+  else showResult();
+}
+
+function goBack() {
+  if (cur>0) { cur--; renderQ(); }
+}
+
+function showResult() {
+  var cnt = {И:0,Т:0,Н:0,С:0};
+  for (var i=0; i<QS.length; i++) {
+    if (ans[i]!==null) cnt[QS[i].opts[ans[i]].tp]++;
+  }
+  var winner='С', max=0;
+  for (var k in cnt) { if (cnt[k]>max) { max=cnt[k]; winner=k; } }
+  var t = TYPES[winner];
+  document.getElementById('rlabel').textContent = 'Тип ' + t.num;
+  document.getElementById('rname').textContent = t.name;
+  document.getElementById('rtag').textContent = t.tag;
+  document.getElementById('rbody').innerHTML = t.body.map(function(p){return '<p>'+p+'</p>';}).join('');
+  document.getElementById('rpat').textContent = t.pat;
+  document.getElementById('rcost').textContent = t.cost;
+  document.getElementById('rstep').textContent = t.step;
+  document.getElementById('barprog').classList.remove('show');
+  show('s-res');
+}
+
+function restartTest() {
+  cur=0; ans=[null,null,null,null,null,null,null,null,null];
+  document.getElementById('barprog').classList.add('show');
+  show('s-q');
+  renderQ();
+}
+
+document.getElementById('startBtn').addEventListener('click', startTest);
+document.getElementById('nextBtn').addEventListener('click', goNext);
+document.getElementById('backBtn').addEventListener('click', goBack);
+document.getElementById('retryBtn').addEventListener('click', restartTest);
+</script>
+</body>
+</html>
