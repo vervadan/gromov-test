@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Тест: Какой у тебя тип финансового мышления?</title>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-6EXMN75VE4"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-6EXMN75VE4');
+</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Mulish:wght@300;400;600&display=swap');
 
@@ -203,7 +210,7 @@ h1 em { font-style: italic; color: #8B253B; }
   <div class="cta">
     <h2>Хочешь разобраться глубже?</h2>
     <p>Алексей разбирает психологию денег в коротких видео — без эзотерики и мотивашек. Только конкретика.</p>
-    <a class="btn-tg" href="https://t.me/gromov_schitaet" target="_blank">Перейти в Telegram</a>
+    <a class="btn-tg" href="https://t.me/gromov_schitaet" onclick="gtag('event','tg_click',{event_category:'funnel'})" target="_blank">Перейти в Telegram</a>
     <button class="btn-retry" id="retryBtn">Пройти тест заново</button>
   </div>
 </div>
@@ -351,6 +358,7 @@ function pick(idx) {
 }
 
 function startTest() {
+  gtag('event', 'test_started', {event_category: 'funnel'});
   document.getElementById('barprog').classList.add('show');
   show('s-q');
   renderQ();
@@ -382,6 +390,7 @@ function showResult() {
   document.getElementById('rcost').textContent = t.cost;
   document.getElementById('rstep').textContent = t.step;
   document.getElementById('barprog').classList.remove('show');
+  gtag('event', 'test_completed', {event_category: 'funnel', event_label: winner});
   show('s-res');
 }
 
