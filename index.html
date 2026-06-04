@@ -117,11 +117,10 @@ h1 em { font-style: italic; color: #8B253B; }
   letter-spacing: 0.08em; text-transform: uppercase;
   cursor: pointer; touch-action: manipulation;
   flex: 2;
-  opacity: 0.4; pointer-events: none;
   transition: opacity 0.2s;
 }
-.btn-pri.on { opacity: 1; pointer-events: auto; }
-.btn-pri:active { background: #a02d47; }
+.btn-pri:disabled { opacity: 0.35; cursor: default; }
+.btn-pri:not(:disabled):active { background: #a02d47; }
 
 /* RESULT */
 #s-res { padding: 32px 20px 60px; max-width: 600px; margin: 0 auto; }
@@ -343,7 +342,7 @@ function renderQ() {
   document.getElementById('backBtn').style.visibility = cur===0 ? 'hidden' : 'visible';
   var nb = document.getElementById('nextBtn');
   nb.textContent = cur===QS.length-1 ? 'Результат →' : 'Далее →';
-  if (ans[cur]!==null) nb.classList.add('on'); else nb.classList.remove('on');
+  nb.disabled = ans[cur] === null;
 }
 
 function pick(idx) {
@@ -354,7 +353,7 @@ function pick(idx) {
   }
   var pct = Math.round(((cur+1)/QS.length)*100);
   document.getElementById('pfill').style.width = pct+'%';
-  document.getElementById('nextBtn').classList.add('on');
+  document.getElementById('nextBtn').disabled = false;
 }
 
 function startTest() {
