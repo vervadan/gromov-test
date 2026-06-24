@@ -13,8 +13,6 @@ app = Flask(__name__)
 GMAIL_USER = os.environ.get('GMAIL_USER', '')
 GMAIL_PASS = os.environ.get('GMAIL_PASS', '')
 
-# ShopID -> номер счёта -> тип
-# 1385884-1 = Избегатель, -2 = Транжира, -3 = Накопитель, -4 = Стратег
 INVOICE_MAP = {
     '1385884-1': 'Избегатель',
     '1385884-2': 'Транжира',
@@ -30,23 +28,20 @@ PDF_MAP = {
 }
 
 def find_email(obj):
-    for key in ['custEmail', 'customerNumber', 'customer_email']:
-        val = obj.get(key, '')
-        if val and '@' in str(val):
-            return val
-    receipt = obj.get('receipt', {})
-    customer = receipt.get('customer', {})
-    if customer.get('email'):
-        return customer['email']
+    # Email в metadata.custEmail
+    meta = obj.get('metadata', {})
+    if meta.get('custEmail'):
+        return meta['custEmail']
+    if meta.get('customerNumber') and '@' in str(meta.get('customerNumber', '')):
+        return meta['customerNumber']
     return None
 
 def find_invoice_number(obj):
-    # dashboardInvoiceOriginalNumber = "1385884-2"
-    inv = obj.get('dashboardInvoiceOriginalNumber', '')
+    meta = obj.get('metadata', {})
+    inv = meta.get('dashboardInvoiceOriginalNumber', '')
     if inv:
         return inv
-    # orderNumber = "1385884-2-1782294616746" — берём первые две части
-    order = obj.get('orderNumber', '')
+    order = meta.get('orderNumber', '')
     if order:
         parts = order.split('-')
         if len(parts) >= 2:
@@ -102,13 +97,10 @@ def webhook():
     if not data:
         return jsonify({'error': 'no data'}), 400
 
-    print(f"Webhook event: {data.get('event')}")
-
     if data.get('event') != 'payment.succeeded':
         return jsonify({'status': 'ignored'}), 200
 
     obj = data.get('object', {})
-    
     email = find_email(obj)
     invoice_num = find_invoice_number(obj)
     product_name = INVOICE_MAP.get(invoice_num, '')
