@@ -33,8 +33,16 @@ PDF_MAP = {
     'Стратег': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_strateg.pdf',
 }
 
-# Состояния пользователей
-user_states = {}  # chat_id -> {'state': 'waiting_email' | 'waiting_choice', 'orders': [...]}
+user_states = {}
+
+MAIN_KEYBOARD = {
+    'keyboard': [
+        [{'text': '🧪 Пройти тест'}, {'text': '📩 Получить файл'}],
+        [{'text': '💬 Поддержка'}]
+    ],
+    'resize_keyboard': True,
+    'persistent': True
+}
 
 def get_sheet():
     creds_json = os.environ.get('GOOGLE_CREDS_JSON', '')
@@ -101,11 +109,14 @@ def send_pdf_to_telegram(chat_id, product_name):
         print(f"Telegram error: {e}")
         return False
 
-def send_tg_message(chat_id, text):
+def send_tg_message(chat_id, text, keyboard=None):
+    payload = {'chat_id': chat_id, 'text': text}
+    if keyboard:
+        payload['reply_markup'] = json.dumps(keyboard)
     try:
         requests.post(
             f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
-            json={'chat_id': chat_id, 'text': text},
+            json=payload,
             timeout=10
         )
     except Exception as e:
@@ -163,7 +174,7 @@ def handle_tg_update(update):
         return
 
     # Ждём email
-    if state.get('state') == 'waiting_email' and not text.startswith('/'):
+    if state.get('state') == 'waiting_email' and not text.startswith('/') and text not in ['🧪 Пройти тест', '📩 Получить файл', '💬 Поддержка']:
         del user_states[chat_id]
         user_email = text.lower().strip()
         try:
@@ -172,14 +183,14 @@ def handle_tg_update(update):
                 send_tg_message(chat_id,
                     f'Оплата для {user_email} не найдена.\n\n'
                     f'Проверь email — он должен совпадать с тем, что вводил при оплате.\n\n'
-                    f'Если проблема не решается — напиши @gromov_schitaet.')
+                    f'Если проблема не решается — напиши в поддержку.',
+                    MAIN_KEYBOARD)
                 return
 
             if len(orders) == 1:
                 sheet = get_sheet()
                 deliver_order(chat_id, orders[0], sheet)
             else:
-                # Несколько заказов — показываем список
                 lines = [f'На {user_email} найдено {len(orders)} заказа. Какой файл прислать?\n']
                 for i, o in enumerate(orders, 1):
                     status = '✓ отправлен' if o['status'] == 'sent' else 'не получен'
@@ -192,9 +203,10 @@ def handle_tg_update(update):
             send_tg_message(chat_id, 'Произошла ошибка. Попробуй через минуту.')
         return
 
-    if text.startswith('/start'):
+    # Кнопки и команды
+    if text in ['/start', '🧪 Пройти тест'] or text.startswith('/start '):
         parts = text.split()
-        if len(parts) > 1:
+        if len(parts) > 1 and not text.startswith('🧪'):
             type_key = parts[1].lower()
             if type_key in PAYMENT_LINKS:
                 product_name, pay_url = PAYMENT_LINKS[type_key]
@@ -202,22 +214,34 @@ def handle_tg_update(update):
                     f'Твой тип — {product_name}.\n\n'
                     f'Полный разбор и план на 30 дней — 390 ₽.\n\n'
                     f'Оплати по ссылке:\n{pay_url}\n\n'
-                    f'После оплаты вернись сюда и напиши /get — я пришлю файл.')
-            else:
-                send_tg_message(chat_id,
-                    'Привет! Пройди тест чтобы узнать свой тип:\n\nhttps://vervadan.github.io/gromov-test')
+                    f'После оплаты вернись сюда и нажми «📩 Получить файл».',
+                    MAIN_KEYBOARD)
+                return
+
+        if text == '🧪 Пройти тест':
+            send_tg_message(chat_id,
+                'Пройди тест — узнаешь свой тип финансового мышления:\n\nhttps://vervadan.github.io/gromov-test',
+                MAIN_KEYBOARD)
         else:
             send_tg_message(chat_id,
-                'Привет! Пройди тест чтобы узнать свой тип:\n\nhttps://vervadan.github.io/gromov-test')
+                'Привет. Я Алексей Громов — разбираю, почему деньги не задерживаются, даже когда их достаточно.\n\n'
+                'Если ты здесь — значит уже прошёл тест. Хорошо.\n\n'
+                'Выбери что нужно:',
+                MAIN_KEYBOARD)
 
-    elif text.startswith('/get'):
+    elif text in ['/get', '📩 Получить файл']:
         user_states[chat_id] = {'state': 'waiting_email'}
         send_tg_message(chat_id, 'Напиши email который указывал при оплате:')
 
+    elif text == '💬 Поддержка':
+        send_tg_message(chat_id,
+            'Если что-то пошло не так — напиши напрямую:\n\n@vervadan',
+            MAIN_KEYBOARD)
+
     else:
         send_tg_message(chat_id,
-            'Если ты уже оплатил — напиши /get и я пришлю файл.\n\n'
-            'Если ещё нет — пройди тест:\nhttps://vervadan.github.io/gromov-test')
+            'Выбери действие:',
+            MAIN_KEYBOARD)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
