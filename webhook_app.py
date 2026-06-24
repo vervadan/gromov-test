@@ -1,18 +1,15 @@
 import os
 import json
-import smtplib
+import base64
 import threading
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email.mime.text import MIMEText
-from email import encoders
 from flask import Flask, request, jsonify
 import requests
 
 app = Flask(__name__)
 
-GMAIL_USER = os.environ.get('GMAIL_USER', '')
-GMAIL_PASS = os.environ.get('GMAIL_PASS', '')
+UNISENDER_API_KEY = os.environ.get('UNISENDER_API_KEY', '')
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'gromov.schitaet@gmail.com')
+SENDER_NAME = 'Алексей Громов'
 
 INVOICE_MAP = {
     '1385884-1': 'Избегатель',
@@ -54,6 +51,7 @@ def send_pdf_email(to_email, product_name):
         return False
 
     pdf_url, pdf_file = PDF_MAP[product_name]
+
     try:
         resp = requests.get(pdf_url, timeout=30)
         if resp.status_code != 200:
@@ -63,12 +61,9 @@ def send_pdf_email(to_email, product_name):
         print(f"PDF download error: {e}")
         return False
 
-    msg = MIMEMultipart()
-    msg['From'] = f'Алексей Громов <{GMAIL_USER}>'
-    msg['To'] = to_email
-    msg['Subject'] = f'Твой разбор готов — {product_name}'
+    pdf_b64 = base64.b64encode(resp.content).decode('utf-8')
 
-    body = f"""Привет!
+    body_text = f"""Привет!
 
 Ты прошёл тест и получил свой тип — {product_name}.
 
@@ -77,22 +72,40 @@ def send_pdf_email(to_email, product_name):
 Алексей Громов
 t.me/gromov_schitaet"""
 
-    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+    body_html = f"""<p>Привет!</p>
+<p>Ты прошёл тест и получил свой тип — <strong>{product_name}</strong>.</p>
+<p>В этом письме — полный разбор и план на 30 дней. Сохрани файл, он твой.</p>
+<p>Алексей Громов<br><a href="https://t.me/gromov_schitaet">t.me/gromov_schitaet</a></p>"""
 
-    part = MIMEBase('application', 'octet-stream')
-    part.set_payload(resp.content)
-    encoders.encode_base64(part)
-    part.add_header('Content-Disposition', f'attachment; filename="{pdf_file}"')
-    msg.attach(part)
+    payload = {
+        'api_key': UNISENDER_API_KEY,
+        'format': 'json',
+        'email': to_email,
+        'sender_name': SENDER_NAME,
+        'sender_email': SENDER_EMAIL,
+        'subject': f'Твой разбор готов — {product_name}',
+        'body': body_html,
+        'list_id': '1',
+        'attachments[0][name]': pdf_file,
+        'attachments[0][content]': pdf_b64,
+    }
 
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as server:
-            server.login(GMAIL_USER, GMAIL_PASS)
-            server.sendmail(GMAIL_USER, to_email, msg.as_bytes())
-        print(f"Email sent to {to_email} with {product_name}")
-        return True
+        r = requests.post(
+            'https://api.unisender.com/ru/api/sendEmail',
+            data=payload,
+            timeout=30
+        )
+        result = r.json()
+        print(f"Unisender response: {result}")
+        if 'result' in result:
+            print(f"Email sent to {to_email} with {product_name}")
+            return True
+        else:
+            print(f"Unisender error: {result}")
+            return False
     except Exception as e:
-        print(f"Email error: {e}")
+        print(f"Unisender request error: {e}")
         return False
 
 @app.route('/webhook', methods=['POST'])
@@ -119,7 +132,6 @@ def webhook():
         print(f"Unknown invoice: {invoice_num}")
         return jsonify({'status': 'unknown_invoice'}), 200
 
-    # Отвечаем ЮКассе сразу, письмо отправляем в фоне
     t = threading.Thread(target=send_pdf_email, args=(email, product_name))
     t.daemon = True
     t.start()
