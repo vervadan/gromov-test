@@ -209,7 +209,7 @@ h1 em { font-style: italic; color: #8B253B; }
   <div class="cta">
     <h2>Хочешь разобраться глубже?</h2>
     <p>Алексей разбирает психологию денег в коротких видео — без эзотерики и мотивашек. Только конкретика.</p>
-    <a class="btn-tg" href="https://t.me/gromov_schitaet" onclick="gtag('event','tg_click',{event_category:'funnel'})" target="_blank">Перейти в Telegram</a>
+    <a class="btn-tg" id="payBtn" href="#" onclick="gtag('event','pay_click',{event_category:'funnel'})" target="_blank">Получить полный разбор — 390 ₽</a>
     <button class="btn-retry" id="retryBtn">Пройти тест заново</button>
   </div>
 </div>
@@ -271,6 +271,13 @@ var QS = [
     { l:'Г', t:'Ничего конкретного. Неприятно об этом думать', tp:'И' }
   ]}
 ];
+
+var PAY = {
+  И: 'https://yookassa.ru/my/i/ajuPQ2eykFS6/l',
+  Т: 'https://yookassa.ru/my/i/ajuPkTtwzv4z/l',
+  Н: 'https://yookassa.ru/my/i/ajuPqQXocT-I/l',
+  С: 'https://yookassa.ru/my/i/ajuPvDqZHxXI/l'
+};
 
 var TYPES = {
   И: {
@@ -388,6 +395,7 @@ function showResult() {
   document.getElementById('rpat').textContent = t.pat;
   document.getElementById('rcost').textContent = t.cost;
   document.getElementById('rstep').textContent = t.step;
+  document.getElementById('payBtn').href = PAY[winner];
   document.getElementById('barprog').classList.remove('show');
   gtag('event', 'test_completed', {event_category: 'funnel', event_label: winner});
   show('s-res');
