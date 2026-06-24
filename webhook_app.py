@@ -13,68 +13,52 @@ app = Flask(__name__)
 GMAIL_USER = os.environ.get('GMAIL_USER', '')
 GMAIL_PASS = os.environ.get('GMAIL_PASS', '')
 
+# ShopID -> номер счёта -> тип
+# 1385884-1 = Избегатель, -2 = Транжира, -3 = Накопитель, -4 = Стратег
+INVOICE_MAP = {
+    '1385884-1': 'Избегатель',
+    '1385884-2': 'Транжира',
+    '1385884-3': 'Накопитель',
+    '1385884-4': 'Стратег',
+}
+
 PDF_MAP = {
-    'Избегатель': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_izbegatel.pdf',
-    'Транжира': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_tranzira.pdf',
-    'Накопитель': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_nakopitel.pdf',
-    'Стратег': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_strateg.pdf',
+    'Избегатель': ('https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_izbegatel.pdf', 'guide_izbegatel.pdf'),
+    'Транжира': ('https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_tranzira.pdf', 'guide_tranzira.pdf'),
+    'Накопитель': ('https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_nakopitel.pdf', 'guide_nakopitel.pdf'),
+    'Стратег': ('https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_strateg.pdf', 'guide_strateg.pdf'),
 }
 
-PDF_FILES = {
-    'Избегатель': 'guide_izbegatel.pdf',
-    'Транжира': 'guide_tranzira.pdf',
-    'Накопитель': 'guide_nakopitel.pdf',
-    'Стратег': 'guide_strateg.pdf',
-}
-
-def find_email(data):
-    """Ищем email во всех возможных местах"""
-    obj = data.get('object', {})
-    
-    # custEmail на верхнем уровне объекта
-    if obj.get('custEmail'):
-        return obj['custEmail']
-    
-    # customerNumber
-    if obj.get('customerNumber'):
-        val = obj['customerNumber']
-        if '@' in str(val):
+def find_email(obj):
+    for key in ['custEmail', 'customerNumber', 'customer_email']:
+        val = obj.get(key, '')
+        if val and '@' in str(val):
             return val
-    
-    # receipt.customer.email
     receipt = obj.get('receipt', {})
     customer = receipt.get('customer', {})
     if customer.get('email'):
         return customer['email']
-    
-    # metadata
-    meta = obj.get('metadata', {})
-    if meta.get('email'):
-        return meta['email']
-    
-    # recipient
-    recipient = obj.get('recipient', {})
-    if recipient.get('email'):
-        return recipient['email']
-        
     return None
 
-def find_product(data):
-    """Ищем название товара"""
-    obj = data.get('object', {})
-    receipt = obj.get('receipt', {})
-    items = receipt.get('items', [])
-    if items:
-        return items[0].get('description', '')
-    return ''
+def find_invoice_number(obj):
+    # dashboardInvoiceOriginalNumber = "1385884-2"
+    inv = obj.get('dashboardInvoiceOriginalNumber', '')
+    if inv:
+        return inv
+    # orderNumber = "1385884-2-1782294616746" — берём первые две части
+    order = obj.get('orderNumber', '')
+    if order:
+        parts = order.split('-')
+        if len(parts) >= 2:
+            return f"{parts[0]}-{parts[1]}"
+    return None
 
 def send_pdf_email(to_email, product_name):
-    pdf_url = PDF_MAP.get(product_name)
-    pdf_file = PDF_FILES.get(product_name)
-    if not pdf_url:
+    if product_name not in PDF_MAP:
         print(f"Unknown product: {product_name}")
         return False
 
+    pdf_url, pdf_file = PDF_MAP[product_name]
     resp = requests.get(pdf_url)
     if resp.status_code != 200:
         print(f"Failed to download PDF: {resp.status_code}")
@@ -118,23 +102,26 @@ def webhook():
     if not data:
         return jsonify({'error': 'no data'}), 400
 
-    print(f"Webhook: {json.dumps(data, ensure_ascii=False)[:500]}")
+    print(f"Webhook event: {data.get('event')}")
 
     if data.get('event') != 'payment.succeeded':
         return jsonify({'status': 'ignored'}), 200
 
-    email = find_email(data)
-    product_name = find_product(data)
+    obj = data.get('object', {})
+    
+    email = find_email(obj)
+    invoice_num = find_invoice_number(obj)
+    product_name = INVOICE_MAP.get(invoice_num, '')
 
-    print(f"Email: {email}, Product: {product_name}")
+    print(f"Email: {email}, Invoice: {invoice_num}, Product: {product_name}")
 
     if not email:
         print("No email found")
         return jsonify({'status': 'no_email'}), 200
 
     if not product_name:
-        print("No product found")
-        return jsonify({'status': 'no_product'}), 200
+        print(f"Unknown invoice: {invoice_num}")
+        return jsonify({'status': 'unknown_invoice'}), 200
 
     send_pdf_email(email, product_name)
     return jsonify({'status': 'ok'}), 200
