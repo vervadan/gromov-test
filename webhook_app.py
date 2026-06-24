@@ -1,6 +1,7 @@
 import os
 import json
 import smtplib
+import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
@@ -28,7 +29,6 @@ PDF_MAP = {
 }
 
 def find_email(obj):
-    # Email в metadata.custEmail
     meta = obj.get('metadata', {})
     if meta.get('custEmail'):
         return meta['custEmail']
@@ -54,9 +54,13 @@ def send_pdf_email(to_email, product_name):
         return False
 
     pdf_url, pdf_file = PDF_MAP[product_name]
-    resp = requests.get(pdf_url)
-    if resp.status_code != 200:
-        print(f"Failed to download PDF: {resp.status_code}")
+    try:
+        resp = requests.get(pdf_url, timeout=30)
+        if resp.status_code != 200:
+            print(f"Failed to download PDF: {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"PDF download error: {e}")
         return False
 
     msg = MIMEMultipart()
@@ -82,7 +86,7 @@ t.me/gromov_schitaet"""
     msg.attach(part)
 
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as server:
             server.login(GMAIL_USER, GMAIL_PASS)
             server.sendmail(GMAIL_USER, to_email, msg.as_bytes())
         print(f"Email sent to {to_email} with {product_name}")
@@ -115,7 +119,11 @@ def webhook():
         print(f"Unknown invoice: {invoice_num}")
         return jsonify({'status': 'unknown_invoice'}), 200
 
-    send_pdf_email(email, product_name)
+    # Отвечаем ЮКассе сразу, письмо отправляем в фоне
+    t = threading.Thread(target=send_pdf_email, args=(email, product_name))
+    t.daemon = True
+    t.start()
+
     return jsonify({'status': 'ok'}), 200
 
 @app.route('/health', methods=['GET'])
