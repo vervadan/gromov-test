@@ -18,6 +18,14 @@ INVOICE_MAP = {
     '1385884-4': 'Стратег',
 }
 
+# Ссылки на оплату в ЮКассе
+PAYMENT_LINKS = {
+    'izbegatel': ('Избегатель', 'https://yookassa.ru/my/i/ajuPQ2eykFS6/l'),
+    'tranzira': ('Транжира', 'https://yookassa.ru/my/i/ajuPkTtwzv4z/l'),
+    'nakopitel': ('Накопитель', 'https://yookassa.ru/my/i/ajuPqQXocT-I/l'),
+    'strateg': ('Стратег', 'https://yookassa.ru/my/i/ajuPvDqZHxXI/l'),
+}
+
 PDF_MAP = {
     'Избегатель': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_izbegatel.pdf',
     'Транжира': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_tranzira.pdf',
@@ -35,14 +43,6 @@ def get_sheet():
     gc = gspread.authorize(creds)
     return gc.open_by_key(SPREADSHEET_ID).sheet1
 
-def find_email(obj):
-    meta = obj.get('metadata', {})
-    if meta.get('custEmail'):
-        return meta['custEmail']
-    if meta.get('customerNumber') and '@' in str(meta.get('customerNumber', '')):
-        return meta['customerNumber']
-    return None
-
 def find_invoice_number(obj):
     meta = obj.get('metadata', {})
     inv = meta.get('dashboardInvoiceOriginalNumber', '')
@@ -58,7 +58,6 @@ def find_invoice_number(obj):
 def save_order(invoice_num, product_name):
     try:
         sheet = get_sheet()
-        # Проверяем нет ли уже такого invoice
         records = sheet.get_all_values()
         for row in records[1:]:
             if row and row[0] == invoice_num:
@@ -78,11 +77,10 @@ def send_pdf_to_telegram(chat_id, product_name):
         if pdf_resp.status_code != 200:
             print(f"PDF download failed: {pdf_resp.status_code}")
             return False
-        # Отправляем документ
         files = {'document': (f'guide_{product_name}.pdf', pdf_resp.content, 'application/pdf')}
         data = {
             'chat_id': chat_id,
-            'caption': f'Твой разбор — {product_name}. Сохрани файл, он твой.\n\nt.me/gromov_schitaet'
+            'caption': f'Твой разбор — {product_name}. Сохрани файл.\n\nt.me/gromov_schitaet'
         }
         r = requests.post(
             f'https://api.telegram.org/bot{BOT_TOKEN}/sendDocument',
@@ -90,17 +88,20 @@ def send_pdf_to_telegram(chat_id, product_name):
             data=data,
             timeout=30
         )
-        print(f"Telegram sendDocument: {r.status_code} {r.text[:200]}")
+        print(f"Telegram sendDocument: {r.status_code}")
         return r.status_code == 200
     except Exception as e:
         print(f"Telegram error: {e}")
         return False
 
-def send_tg_message(chat_id, text):
+def send_tg_message(chat_id, text, reply_markup=None):
+    payload = {'chat_id': chat_id, 'text': text}
+    if reply_markup:
+        payload['reply_markup'] = json.dumps(reply_markup)
     try:
         requests.post(
             f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
-            json={'chat_id': chat_id, 'text': text},
+            json=payload,
             timeout=10
         )
     except Exception as e:
@@ -119,13 +120,29 @@ def handle_tg_update(update):
     if text.startswith('/start'):
         parts = text.split()
         if len(parts) > 1:
-            # /start 1385884-2
-            invoice_num = parts[1]
+            type_key = parts[1].lower()
+            if type_key in PAYMENT_LINKS:
+                product_name, pay_url = PAYMENT_LINKS[type_key]
+                send_tg_message(chat_id,
+                    f'Твой тип — {product_name}.\n\n'
+                    f'Полный разбор и план на 30 дней — 390 ₽.\n\n'
+                    f'Оплати по ссылке:\n{pay_url}\n\n'
+                    f'После оплаты вернись сюда и напиши:\n/get НОМЕР_ЗАКАЗА\n\n'
+                    f'Номер заказа придёт в письме от ЮКассы.')
+            else:
+                send_tg_message(chat_id,
+                    'Привет! Пройди тест чтобы узнать свой тип:\n\nhttps://vervadan.github.io/gromov-test')
         else:
-            send_tg_message(chat_id, 
-                'Привет! Чтобы получить свой PDF, напиши номер заказа из письма ЮКассы.\n\nФормат: /get 1385884-2')
+            send_tg_message(chat_id,
+                'Привет! Пройди тест чтобы узнать свой тип:\n\nhttps://vervadan.github.io/gromov-test')
+
+    elif text.startswith('/get'):
+        parts = text.split()
+        if len(parts) < 2:
+            send_tg_message(chat_id, 'Укажи номер заказа из письма ЮКассы:\n\n/get 1385884-2')
             return
 
+        invoice_num = parts[1]
         try:
             sheet = get_sheet()
             records = sheet.get_all_values()
@@ -134,31 +151,25 @@ def handle_tg_update(update):
                     product_name = row[1]
                     status = row[3] if len(row) > 3 else 'pending'
                     if status == 'sent':
-                        send_tg_message(chat_id, 'Этот заказ уже был отправлен. Проверь предыдущие сообщения в этом чате.')
+                        send_tg_message(chat_id, 'Этот заказ уже был отправлен. Проверь предыдущие сообщения.')
                         return
-                    send_tg_message(chat_id, f'Нашёл твой заказ — {product_name}. Отправляю файл...')
+                    send_tg_message(chat_id, f'Нашёл заказ — {product_name}. Отправляю файл...')
                     ok = send_pdf_to_telegram(chat_id, product_name)
                     if ok:
                         sheet.update_cell(i, 3, str(chat_id))
                         sheet.update_cell(i, 4, 'sent')
                     return
-            send_tg_message(chat_id, 
-                f'Заказ {invoice_num} не найден. Проверь номер — он в письме от ЮКассы.\n\nЕсли проблема не решается, напиши в поддержку.')
+            send_tg_message(chat_id,
+                f'Заказ {invoice_num} не найден.\n\n'
+                f'Проверь номер — он в письме от ЮКассы на тему "Счёт оплачен".\n\n'
+                f'Если проблема не решается — напиши @gromov_schitaet.')
         except Exception as e:
             print(f"Error processing order: {e}")
             send_tg_message(chat_id, 'Произошла ошибка. Попробуй через минуту.')
 
-    elif text.startswith('/get'):
-        parts = text.split()
-        if len(parts) < 2:
-            send_tg_message(chat_id, 'Укажи номер заказа: /get 1385884-2')
-            return
-        # Переиспользуем логику /start
-        handle_tg_update({'message': {'chat': {'id': chat_id}, 'text': f'/start {parts[1]}'}})
-
     else:
-        send_tg_message(chat_id, 
-            'Чтобы получить PDF, напиши номер заказа из письма ЮКассы:\n\n/get 1385884-2\n\n(замени на свой номер)')
+        send_tg_message(chat_id,
+            'Напиши номер заказа из письма ЮКассы:\n\n/get 1385884-2\n\n(замени на свой номер)')
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
