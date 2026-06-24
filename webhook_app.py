@@ -1,6 +1,7 @@
 import os
 import json
 import threading
+from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify
 import requests
 import gspread
@@ -32,6 +33,9 @@ PDF_MAP = {
     'Стратег': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_strateg.pdf',
 }
 
+# Храним ожидающих email: chat_id -> True
+waiting_for_email = {}
+
 def get_sheet():
     creds_json = os.environ.get('GOOGLE_CREDS_JSON', '')
     creds_dict = json.loads(creds_json)
@@ -62,7 +66,7 @@ def find_invoice_number(obj):
             return f"{parts[0]}-{parts[1]}"
     return None
 
-def save_order(invoice_num, product_name, email):
+def save_order(invoice_num, product_name, email, payment_id, payment_dt):
     try:
         sheet = get_sheet()
         records = sheet.get_all_values()
@@ -70,7 +74,7 @@ def save_order(invoice_num, product_name, email):
             if row and row[0] == invoice_num:
                 print(f"Invoice {invoice_num} already exists")
                 return
-        sheet.append_row([invoice_num, product_name, email, '', 'pending'])
+        sheet.append_row([invoice_num, product_name, email, '', 'pending', payment_id, payment_dt])
         print(f"Saved order: {invoice_num} -> {product_name} -> {email}")
     except Exception as e:
         print(f"Sheet error: {e}")
@@ -82,7 +86,6 @@ def send_pdf_to_telegram(chat_id, product_name):
     try:
         pdf_resp = requests.get(pdf_url, timeout=30)
         if pdf_resp.status_code != 200:
-            print(f"PDF download failed: {pdf_resp.status_code}")
             return False
         files = {'document': (f'guide_{product_name}.pdf', pdf_resp.content, 'application/pdf')}
         data = {
@@ -91,11 +94,8 @@ def send_pdf_to_telegram(chat_id, product_name):
         }
         r = requests.post(
             f'https://api.telegram.org/bot{BOT_TOKEN}/sendDocument',
-            files=files,
-            data=data,
-            timeout=30
+            files=files, data=data, timeout=30
         )
-        print(f"Telegram sendDocument: {r.status_code}")
         return r.status_code == 200
     except Exception as e:
         print(f"Telegram error: {e}")
@@ -111,6 +111,31 @@ def send_tg_message(chat_id, text):
     except Exception as e:
         print(f"TG message error: {e}")
 
+def process_email(chat_id, user_email):
+    try:
+        sheet = get_sheet()
+        records = sheet.get_all_values()
+        for i, row in enumerate(records[1:], start=2):
+            if len(row) >= 3 and row[2].lower().strip() == user_email:
+                product_name = row[1]
+                status = row[4] if len(row) > 4 else 'pending'
+                if status == 'sent':
+                    send_tg_message(chat_id, 'Файл по этому email уже был отправлен. Проверь предыдущие сообщения.')
+                    return
+                send_tg_message(chat_id, f'Нашёл заказ — {product_name}. Отправляю файл...')
+                ok = send_pdf_to_telegram(chat_id, product_name)
+                if ok:
+                    sheet.update_cell(i, 4, str(chat_id))
+                    sheet.update_cell(i, 5, 'sent')
+                return
+        send_tg_message(chat_id,
+            f'Оплата для {user_email} не найдена.\n\n'
+            f'Проверь email — он должен совпадать с тем, что вводил при оплате.\n\n'
+            f'Если проблема не решается — напиши @gromov_schitaet.')
+    except Exception as e:
+        print(f"Error processing order: {e}")
+        send_tg_message(chat_id, 'Произошла ошибка. Попробуй через минуту.')
+
 def handle_tg_update(update):
     message = update.get('message', {})
     chat_id = message.get('chat', {}).get('id')
@@ -120,6 +145,13 @@ def handle_tg_update(update):
         return
 
     print(f"TG message from {chat_id}: {text}")
+
+    # Если ждём email от пользователя
+    if chat_id in waiting_for_email and not text.startswith('/'):
+        del waiting_for_email[chat_id]
+        user_email = text.lower().strip()
+        process_email(chat_id, user_email)
+        return
 
     if text.startswith('/start'):
         parts = text.split()
@@ -131,8 +163,7 @@ def handle_tg_update(update):
                     f'Твой тип — {product_name}.\n\n'
                     f'Полный разбор и план на 30 дней — 390 ₽.\n\n'
                     f'Оплати по ссылке:\n{pay_url}\n\n'
-                    f'После оплаты вернись сюда и напиши:\n/get твой@email.ru\n\n'
-                    f'Укажи email который вводил при оплате.')
+                    f'После оплаты вернись сюда и напиши /get — я пришлю файл.')
             else:
                 send_tg_message(chat_id,
                     'Привет! Пройди тест чтобы узнать свой тип:\n\nhttps://vervadan.github.io/gromov-test')
@@ -141,39 +172,13 @@ def handle_tg_update(update):
                 'Привет! Пройди тест чтобы узнать свой тип:\n\nhttps://vervadan.github.io/gromov-test')
 
     elif text.startswith('/get'):
-        parts = text.split()
-        if len(parts) < 2:
-            send_tg_message(chat_id, 'Укажи email который вводил при оплате:\n\n/get твой@email.ru')
-            return
-
-        user_email = parts[1].lower().strip()
-        try:
-            sheet = get_sheet()
-            records = sheet.get_all_values()
-            for i, row in enumerate(records[1:], start=2):
-                if len(row) >= 3 and row[2].lower().strip() == user_email:
-                    product_name = row[1]
-                    status = row[4] if len(row) > 4 else 'pending'
-                    if status == 'sent':
-                        send_tg_message(chat_id, 'Файл по этому email уже был отправлен. Проверь предыдущие сообщения.')
-                        return
-                    send_tg_message(chat_id, f'Нашёл заказ — {product_name}. Отправляю файл...')
-                    ok = send_pdf_to_telegram(chat_id, product_name)
-                    if ok:
-                        sheet.update_cell(i, 4, str(chat_id))
-                        sheet.update_cell(i, 5, 'sent')
-                    return
-            send_tg_message(chat_id,
-                f'Оплата для {user_email} не найдена.\n\n'
-                f'Проверь email — он должен совпадать с тем, что вводил при оплате.\n\n'
-                f'Если проблема не решается — напиши @gromov_schitaet.')
-        except Exception as e:
-            print(f"Error processing order: {e}")
-            send_tg_message(chat_id, 'Произошла ошибка. Попробуй через минуту.')
+        waiting_for_email[chat_id] = True
+        send_tg_message(chat_id, 'Напиши email который указывал при оплате:')
 
     else:
         send_tg_message(chat_id,
-            'Напиши email который вводил при оплате:\n\n/get твой@email.ru')
+            'Если ты уже оплатил — напиши /get и я пришлю файл.\n\n'
+            'Если ещё нет — пройди тест:\nhttps://vervadan.github.io/gromov-test')
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -188,11 +193,21 @@ def webhook():
     invoice_num = find_invoice_number(obj)
     product_name = INVOICE_MAP.get(invoice_num, '')
     email = find_email(obj)
+    payment_id = obj.get('id', '')
 
-    print(f"Payment: Invoice: {invoice_num}, Product: {product_name}, Email: {email}")
+    # Дата платежа из объекта, конвертируем в МСК
+    captured_at = obj.get('captured_at') or obj.get('created_at', '')
+    try:
+        dt = datetime.fromisoformat(captured_at.replace('Z', '+00:00'))
+        msk = dt.astimezone(timezone(timedelta(hours=3)))
+        payment_dt = msk.strftime('%d.%m.%Y %H:%M')
+    except:
+        payment_dt = captured_at
+
+    print(f"Payment: Invoice: {invoice_num}, Product: {product_name}, Email: {email}, ID: {payment_id}")
 
     if invoice_num and product_name:
-        t = threading.Thread(target=save_order, args=(invoice_num, product_name, email or ''))
+        t = threading.Thread(target=save_order, args=(invoice_num, product_name, email or '', payment_id, payment_dt))
         t.daemon = True
         t.start()
 
