@@ -1,8 +1,6 @@
 import os
 import json
 import smtplib
-import hashlib
-import hmac
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
@@ -12,48 +10,76 @@ import requests
 
 app = Flask(__name__)
 
-# Конфиг из переменных окружения
 GMAIL_USER = os.environ.get('GMAIL_USER', '')
 GMAIL_PASS = os.environ.get('GMAIL_PASS', '')
-YUKASSA_SECRET = os.environ.get('YUKASSA_SECRET', '')
 
-# Соответствие товаров и PDF
 PDF_MAP = {
-    'Избегатель': {
-        'url': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_izbegatel.pdf',
-        'filename': 'guide_izbegatel.pdf',
-        'title': 'Избегатель — разбор финансового типа'
-    },
-    'Транжира': {
-        'url': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_tranzira.pdf',
-        'filename': 'guide_tranzira.pdf',
-        'title': 'Транжира — разбор финансового типа'
-    },
-    'Накопитель': {
-        'url': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_nakopitel.pdf',
-        'filename': 'guide_nakopitel.pdf',
-        'title': 'Накопитель — разбор финансового типа'
-    },
-    'Стратег': {
-        'url': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_strateg.pdf',
-        'filename': 'guide_strateg.pdf',
-        'title': 'Стратег — разбор финансового типа'
-    },
+    'Избегатель': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_izbegatel.pdf',
+    'Транжира': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_tranzira.pdf',
+    'Накопитель': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_nakopitel.pdf',
+    'Стратег': 'https://raw.githubusercontent.com/vervadan/gromov-test/main/guide_strateg.pdf',
 }
 
+PDF_FILES = {
+    'Избегатель': 'guide_izbegatel.pdf',
+    'Транжира': 'guide_tranzira.pdf',
+    'Накопитель': 'guide_nakopitel.pdf',
+    'Стратег': 'guide_strateg.pdf',
+}
+
+def find_email(data):
+    """Ищем email во всех возможных местах"""
+    obj = data.get('object', {})
+    
+    # custEmail на верхнем уровне объекта
+    if obj.get('custEmail'):
+        return obj['custEmail']
+    
+    # customerNumber
+    if obj.get('customerNumber'):
+        val = obj['customerNumber']
+        if '@' in str(val):
+            return val
+    
+    # receipt.customer.email
+    receipt = obj.get('receipt', {})
+    customer = receipt.get('customer', {})
+    if customer.get('email'):
+        return customer['email']
+    
+    # metadata
+    meta = obj.get('metadata', {})
+    if meta.get('email'):
+        return meta['email']
+    
+    # recipient
+    recipient = obj.get('recipient', {})
+    if recipient.get('email'):
+        return recipient['email']
+        
+    return None
+
+def find_product(data):
+    """Ищем название товара"""
+    obj = data.get('object', {})
+    receipt = obj.get('receipt', {})
+    items = receipt.get('items', [])
+    if items:
+        return items[0].get('description', '')
+    return ''
+
 def send_pdf_email(to_email, product_name):
-    pdf_info = PDF_MAP.get(product_name)
-    if not pdf_info:
+    pdf_url = PDF_MAP.get(product_name)
+    pdf_file = PDF_FILES.get(product_name)
+    if not pdf_url:
         print(f"Unknown product: {product_name}")
         return False
 
-    # Скачиваем PDF
-    resp = requests.get(pdf_info['url'])
+    resp = requests.get(pdf_url)
     if resp.status_code != 200:
         print(f"Failed to download PDF: {resp.status_code}")
         return False
 
-    # Составляем письмо
     msg = MIMEMultipart()
     msg['From'] = f'Алексей Громов <{GMAIL_USER}>'
     msg['To'] = to_email
@@ -70,14 +96,12 @@ t.me/gromov_schitaet"""
 
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
-    # Прикрепляем PDF
     part = MIMEBase('application', 'octet-stream')
     part.set_payload(resp.content)
     encoders.encode_base64(part)
-    part.add_header('Content-Disposition', f'attachment; filename="{pdf_info["filename"]}"')
+    part.add_header('Content-Disposition', f'attachment; filename="{pdf_file}"')
     msg.attach(part)
 
-    # Отправляем
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(GMAIL_USER, GMAIL_PASS)
@@ -94,39 +118,25 @@ def webhook():
     if not data:
         return jsonify({'error': 'no data'}), 400
 
-    print(f"Webhook received: {json.dumps(data, ensure_ascii=False)}")
+    print(f"Webhook: {json.dumps(data, ensure_ascii=False)[:500]}")
 
-    # Проверяем что это успешная оплата
-    event_type = data.get('event')
-    if event_type != 'payment.succeeded':
+    if data.get('event') != 'payment.succeeded':
         return jsonify({'status': 'ignored'}), 200
 
-    payment = data.get('object', {})
-    
-    # Email покупателя
-    receipt = payment.get('receipt', {})
-    customer = receipt.get('customer', {})
-    email = customer.get('email', '')
-    
-    if not email:
-        # Пробуем другое место
-        email = payment.get('metadata', {}).get('email', '')
+    email = find_email(data)
+    product_name = find_product(data)
+
+    print(f"Email: {email}, Product: {product_name}")
 
     if not email:
-        print("No email found in payment")
+        print("No email found")
         return jsonify({'status': 'no_email'}), 200
 
-    # Название товара
-    items = receipt.get('items', [])
-    product_name = ''
-    if items:
-        product_name = items[0].get('description', '')
+    if not product_name:
+        print("No product found")
+        return jsonify({'status': 'no_product'}), 200
 
-    print(f"Payment: email={email}, product={product_name}")
-
-    if product_name and email:
-        send_pdf_email(email, product_name)
-
+    send_pdf_email(email, product_name)
     return jsonify({'status': 'ok'}), 200
 
 @app.route('/health', methods=['GET'])
