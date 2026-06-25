@@ -98,13 +98,23 @@ def send_pdf_to_telegram(chat_id, product_name):
         files = {'document': (f'guide_{product_name}.pdf', pdf_resp.content, 'application/pdf')}
         data = {
             'chat_id': chat_id,
-            'caption': f'Твой разбор — {product_name}. Сохрани файл.\n\nt.me/gromov_schitaet'
+            'caption': f'Твой разбор — {product_name}. Сохрани файл.'
         }
         r = requests.post(
             f'https://api.telegram.org/bot{BOT_TOKEN}/sendDocument',
             files=files, data=data, timeout=30
         )
-        return r.status_code == 200
+        if r.status_code == 200:
+            # После выдачи файла — предлагаем подписаться на канал
+            send_tg_message(
+                chat_id,
+                'Если хочешь разбирать такие вещи регулярно — веду канал. '
+                'Без мотивашек, только психология денег.\n\n'
+                't.me/gromov_schitaet',
+                MAIN_KEYBOARD
+            )
+            return True
+        return False
     except Exception as e:
         print(f"Telegram error: {e}")
         return False
@@ -292,4 +302,3 @@ def health():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-
